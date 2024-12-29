@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SummarizeMe</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2 id="pageTitle">Loading...</h2>
+      <button id="summarizeBtn">SummarizeMe</button>
+    </div>
+
+    <div id="extractedContent" class="extracted-content">
+      <div id="loadingExtract" class="loading hidden">
+        <span class="spinner"></span>
+        <p>Extracting content...</p>
+      </div>
+      <p id="extractedText"></p>
+    </div>
+
+    <div class="summary-section">
+      <div class="mode-switches hidden">
+        <label class="switch">
+          <input type="radio" name="mode" value="brief" checked>
+          <span class="slider">Brief</span>
+        </label>
+        <label class="switch">
+          <input type="radio" name="mode" value="detailed">
+          <span class="slider">Detailed</span>
+        </label>
+        <label class="switch">
+          <input type="radio" name="mode" value="points">
+          <span class="slider">Points</span>
+        </label>
+      </div>
+
+      <div id="summaryContent">
+        <div id="loadingSummary" class="loading hidden">
+          <span class="spinner"></span>
+          <p>Generating summary...</p>
+        </div>
+        <div id="summaryText"></div>
+      </div>
+    </div>
+  </div>
+  <script src="readability.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html> 

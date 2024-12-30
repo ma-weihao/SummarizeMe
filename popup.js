@@ -2,6 +2,11 @@ class SummarizeMe {
   constructor() {
     this.cache = new Map();
     this.currentText = '';
+    this.currentLanguage = null;
+    this.currentSummary = null;
+    this.isTranslated = false;
+    this.boundHandleSummarize = this.handleSummarize.bind(this);
+    this.boundHandleTranslate = this.handleTranslate.bind(this);
     this.init();
   }
 
@@ -24,10 +29,11 @@ class SummarizeMe {
     this.modeSwitches = document.querySelector('.mode-switches');
     this.summarySection = document.querySelector('.summary-section');
     this.extractedContent = document.getElementById('extractedContent');
+    this.loadingMessage = document.getElementById('loadingMessage');
   }
 
   bindEvents() {
-    this.summarizeBtn.addEventListener('click', () => this.handleSummarize());
+    this.summarizeBtn.addEventListener('click', this.boundHandleSummarize);
     this.modeInputs.forEach(input => {
       input.addEventListener('change', (e) => this.handleModeChange(e.target.value));
     });
@@ -93,6 +99,8 @@ class SummarizeMe {
   }
 
   async handleSummarize() {
+    this.summarizeBtn.classList.add('hidden');
+    
     this.modeSwitches.classList.remove('hidden');
     this.summarySection.classList.remove('hidden');
     this.extractedContent.classList.add('hidden');
@@ -102,11 +110,31 @@ class SummarizeMe {
   }
 
   async handleModeChange(mode) {
+    if (this.isTranslated) {
+      this.isTranslated = false;
+      this.setupTranslateButton();
+    }
+    
     if (this.cache.has(mode)) {
       this.summaryText.innerHTML = this.cache.get(mode);
+      this.currentSummary = this.summaryText.textContent;
+      
+      const isChinese = /[\u4e00-\u9fa5]/.test(this.currentSummary);
+      if (!isChinese && !this.isTranslated) {
+        this.setupTranslateButton();
+      }
     } else {
       await this.getSummary(mode);
     }
+  }
+
+  setupTranslateButton() {
+    this.summarizeBtn.removeEventListener('click', this.boundHandleSummarize);
+    this.summarizeBtn.removeEventListener('click', this.boundHandleTranslate);
+    
+    this.summarizeBtn.textContent = 'Translate';
+    this.summarizeBtn.classList.remove('hidden');
+    this.summarizeBtn.addEventListener('click', this.boundHandleTranslate);
   }
 
   async getSummary(level) {
@@ -117,14 +145,15 @@ class SummarizeMe {
 
     try {
       this.loadingSummary.classList.remove('hidden');
+      this.loadingMessage.textContent = 'Generating summary...';
       this.summaryText.innerHTML = '';
+      this.isTranslated = false;
 
       const truncatedText = this.truncateText(this.currentText);
       const payload = {
         text: truncatedText,
         level: level
       };
-      console.log('Request payload:', payload);
 
       const response = await fetch('https://writingtools-hk-jgvsuzcgqo.cn-hongkong.fcapp.run/summarizeWebpage', {
         method: 'POST',
@@ -135,18 +164,13 @@ class SummarizeMe {
       });
 
       const data = await response.json();
-      console.log('Parsed response:', data);
       
-      // Handle both response formats
       let summaryText;
       if (typeof data === 'string') {
-        // Direct string response
         summaryText = data;
       } else if (data.data && data.data.res) {
-        // Object response with nested data
         summaryText = data.data.res;
       } else if (data.code === 0 && typeof data.data === 'string') {
-        // Object response with direct string data
         summaryText = data.data;
       } else {
         throw new Error('Invalid response format from API');
@@ -156,6 +180,7 @@ class SummarizeMe {
         throw new Error('No valid summary text received');
       }
 
+      this.currentSummary = summaryText;
       const summary = level === 'points' 
         ? `<ul>${this.formatBulletPoints(summaryText)}</ul>`
         : `<p>${summaryText}</p>`;
@@ -163,9 +188,64 @@ class SummarizeMe {
       this.cache.set(level, summary);
       this.summaryText.innerHTML = summary;
 
+      const isChinese = /[\u4e00-\u9fa5]/.test(summaryText);
+      if (!isChinese) {
+        this.setupTranslateButton();
+      } else {
+        this.summarizeBtn.classList.add('hidden');
+      }
+
     } catch (error) {
       console.error('Summary error:', error);
       this.showError('Failed to generate summary: ' + error.message);
+      this.summarizeBtn.classList.remove('hidden');
+    } finally {
+      this.loadingSummary.classList.add('hidden');
+    }
+  }
+
+  async handleTranslate() {
+    const currentText = this.currentSummary;
+    if (!currentText) {
+      this.showError('No content to translate');
+      return;
+    }
+
+    try {
+      this.loadingSummary.classList.remove('hidden');
+      this.loadingMessage.textContent = 'Translating to Simplified Chinese...';
+      this.summarizeBtn.classList.add('hidden');
+
+      const response = await fetch('https://writingtools-hk-jgvsuzcgqo.cn-hongkong.fcapp.run/translate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: currentText
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!data.translationCN) {
+        throw new Error('No translation received');
+      }
+
+      const currentMode = document.querySelector('input[name="mode"]:checked').value;
+      const translatedSummary = currentMode === 'points' 
+        ? `<ul>${this.formatBulletPoints(data.translationCN)}</ul>`
+        : `<p>${data.translationCN}</p>`;
+
+      this.summaryText.innerHTML = translatedSummary;
+      this.isTranslated = true;
+      this.cache.set(`${currentMode}_translated`, translatedSummary);
+      this.currentSummary = data.translationCN;
+
+    } catch (error) {
+      console.error('Translation error:', error);
+      this.showError('Failed to translate: ' + error.message);
+      this.summarizeBtn.classList.remove('hidden');
     } finally {
       this.loadingSummary.classList.add('hidden');
     }
@@ -175,7 +255,6 @@ class SummarizeMe {
     return text.split('\n')
       .filter(point => point.trim())
       .map(point => {
-        // Remove leading bullet points, dashes, or dots if they exist
         point = point.trim().replace(/^[•\-\.\*]\s*/, '');
         return `<li>${point}</li>`;
       })
@@ -192,7 +271,6 @@ class SummarizeMe {
   }
 }
 
-// Initialize the extension
 document.addEventListener('DOMContentLoaded', () => {
   new SummarizeMe();
 }); 

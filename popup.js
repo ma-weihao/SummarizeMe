@@ -255,7 +255,7 @@ class SummarizeMe {
     return text.split('\n')
       .filter(point => point.trim())
       .map(point => {
-        point = point.trim().replace(/^[•\-\.\*]\s*/, '');
+        point = point.trim().replace(/^[\-\.\*]\s*/, '');
         return `<li>${point}</li>`;
       })
       .join('');
